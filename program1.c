@@ -38,7 +38,9 @@ void* reader(void* arg) {
         
         // Jeśli to pierwszy czytelnik, to on blokuje salę dla pisarzy
         if (reader_count == 1) {
-            pthread_mutex_lock(&room_empty); 
+            pthread_mutex_unlock(&mutex_state);
+            pthread_mutex_lock(&room_empty);
+            pthread_mutex_lock(&mutex_state);
         }
         print_status();
         pthread_mutex_unlock(&mutex_state);
