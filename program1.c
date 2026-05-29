@@ -15,13 +15,14 @@ int reader_q = 0;     // Ilu czytelników czeka w kolejce
 int writer_q = 0;     // Ilu pisarzy czeka w kolejce
 int writer_in = 0;    // Czy pisarz jest w środku (0 - nie, 1 - tak)
 
+
 // Funkcja pomocnicza do wypisywania stanu na ekranie 
 void print_status() {
     printf("ReaderQ: %2d WriterQ: %2d [in: R:%2d W:%2d]\n", reader_q, writer_q, reader_count, writer_in);
-    fflush(stdout); // Wymuszenie natychmiastowego wypisania tekstu na ekran 
+    fflush(stdout); // Wymuszenie natychmiastowego wypisania tekstu na ekran
 }
 
-// Funkcja, którą wykonuje każdy wątek czytelnika
+// Wątek czytelnik
 void* reader(void* arg) {
     while(1) {
         // Czytelnik podchodzi do czytelni i zapisuje się do kolejki
@@ -30,12 +31,12 @@ void* reader(void* arg) {
         print_status();
         pthread_mutex_unlock(&mutex_state);
 
-        //MOMENT WEJŚCIA DO CZYTELNI 
+        // MOMENT WEJŚCIA DO CZYTELNI 
         pthread_mutex_lock(&mutex_state);
         reader_q--;      // Wychodzi z kolejki
         reader_count++;  // wchodzi do środka czytelni
         
-        //Jeśli to pierwszy czytelnik, to on blokuje salę dla pisarzy
+        // Jeśli to pierwszy czytelnik, to on blokuje salę dla pisarzy
         if (reader_count == 1) {
             pthread_mutex_lock(&room_empty); 
         }
@@ -62,7 +63,7 @@ void* reader(void* arg) {
     return NULL;
 }
 
-// Funkcja, którą wykonuje każdy wątek pisarza
+// Wątek-pisarz
 void* writer(void* arg) {
     while(1) {
         // Pisarz podchodzi i staje w kolejce
@@ -94,20 +95,22 @@ void* writer(void* arg) {
         // Zwalnia mutex sali, żeby inni (czytelnicy lub pisarze) mogli wejść
         pthread_mutex_unlock(&room_empty);
 
-        // Życie poza czytelnią (odpoczynek pisarza)
+        // Życie poza czytelnią
         usleep(rand() % 800000);
     }
     return NULL;
 }
 
+
+// Main
 int main(int argc, char* argv[]) {
     // Sprawdzenie czy użytkownik podał odpowiednią liczbę argumentów 
     if (argc < 3) {
-        printf("Użycie: %s <czytelnicy> <pisarze>\n", argv[0]);
+        printf("Użycie: %s <liczba czytelników> <liczba pisarzy>\n", argv[0]);
         return 1;
     }
     
-    // Pobranie liczby z argumentów linii poleceń i zamieniamy na inty 
+    // Pobranie liczby argumentów z linii poleceń i zamiana na inty
     int R = atoi(argv[1]);
     int W = atoi(argv[2]);
 

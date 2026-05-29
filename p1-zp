@@ -1,0 +1,93 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdbool.h>
+// #include <time.h>     // Czas używany w srand(time(NULL))
+#include <pthread.h>  // Wątki
+#include <unistd.h>   // usleep()
+
+
+// Struktura Config
+typedef struct {
+    int readerCount;    // Liczba czytelników
+    int writerCount;    // Liczba pisarzy
+} Config;
+
+
+// Parsowanie argumentów
+Config parseArguments(int argc, char* argv[]) {
+    // Inicjalizacja domyślna struktury
+    Config config = {NULL, NULL, 100, false, 8192};
+    int opt;
+
+    // getopt() przetwarza argumenty linii poleceń
+    while ((opt = getopt(argc, argv, "s:d:t:Rm:")) != -1) {
+        switch (opt) {
+            case 's': config.sourcePath = optarg; break; // source
+            case 'd': config.destPath = optarg; break;   // destination
+            case 't': config.sleepTime = atoi(optarg); break; // czas spania
+            case 'R': config.recursive = true; break;    // rekurencja
+            case 'm': config.mmapThreshold = atoi(optarg); break; // próg mmap
+            default:
+                fprintf(stderr, "Użycie: %s -s <src> -d <dst> [-t <time>] [-R] [-m <threshold>]\n", argv[0]);
+                exit(EXIT_FAILURE);
+        }
+    }
+
+    // Walidacja obecności wymaganych argumentów (ścieżka źródłowa i ścieżka docelowa są wymagane)
+    if (config.sourcePath == NULL || config.destPath == NULL) {
+        fprintf(stderr, "Błąd: Nie podano ścieżki źródłowej albo docelowej. \n");
+        fprintf(stderr, "Format programu: ./program -s </ścieżka/do/źródła> -d </ścieżka/do/folderu/docelowego> [-t <czas snu>] [-R] [-m <próg mmap>]\n");
+        exit(EXIT_FAILURE);
+    }
+
+    // Walidacja poprawności ścieżek (czy obie ścieżki są katalogami?)
+    if (!isDirectory(config.sourcePath) || !isDirectory(config.destPath)) {
+        fprintf(stderr, "Błąd: Podane ścieżki nie są katalogami lub nie istnieją!\n");
+        exit(EXIT_FAILURE);
+    }
+
+    return config;
+}
+
+
+
+// Main
+int main(int argc, char* argv[]) {
+    // Przetwarzanie argumentów podanych przez użytkownika
+    Config config = parseArguments(argc, argv);
+
+    // Program zamieniany jest w Demona, log startu programu
+    daemon(0, 0);
+    syslog(LOG_INFO, "Zamieniono proces w demona");
+
+    // Ustawienie obsługi sygnałów
+    signal(SIGINT, signal_handler);  // Sygnału kończące pracę demona ("kill <PID>")
+    signal(SIGTERM, signal_handler);
+    signal(SIGUSR1, signal_handler);  // Sygnał kończący pracę demona ("kill -SIGURS1 <PID>")
+
+    // Zapisanie konfiguracji demona do syslog
+    syslog(LOG_INFO, "Konfiguracja demona: Źródło - %s; Cel - %s; Czas snu - %ds; Rekurencja - %s; Próg mmap - %d",
+        config.sourcePath, config.destPath, config.sleepTime, config.recursive ? "TAK" : "NIE", config.mmapThreshold);
+
+
+    // Główna pętla demona
+    while (1) {
+        syslog(LOG_INFO, "Uśpiono demona na %d sekund.", config.sleepTime);
+
+        // Pętla spania z możliwością przerwania przez sygnał
+        for (int i = 0; i < config.sleepTime; ++i) {
+            sleep(1); 
+            if (wake_up_flag) {
+                wake_up_flag = 0; // Reset flagi po pobudce sygnałem
+                break;
+            }
+        }
+
+
+        // Po śnie, demon porównuje katalogi; wykonuje kopiowanie, usuwanie, etc.
+        syslog(LOG_INFO, "Obudzono demona.");
+		scan_directory(config.sourcePath, config.destPath, config.recursive, config.mmapThreshold);  // Parametry zostały wcześniej zapisane w config
+    }
+
+    return 0;
+}
